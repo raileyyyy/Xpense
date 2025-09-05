@@ -1,6 +1,6 @@
 import tkinter as tk
 import customtkinter as ctk
-from PIL import ImageTk, Image
+# from PIL import ImageTk, Image
 import mysql.connector
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -435,7 +435,7 @@ def second_page(userid):
                 
                 # Display: ID, Title, Amount, Category, Comment
                 # Color coding for income vs expenses (only for amount column)
-                amount_color = "#FFFFFF"  # Default white text
+                amount_color = "#FFFFFF"  
                 if row[2] in ['Income', 'Allowance']:
                     amount_display = f"+₱{row[3]:,.2f}"
                     amount_color = "#2ECC71"  # Green for income
@@ -463,7 +463,7 @@ def second_page(userid):
             print(f"Error loading table data: {e}")
     
     def search_records():
-        """Search functionality with updated styling"""
+        """Search functionality"""
         search_window = ctk.CTkToplevel(app)
         search_window.title("Search Records")
         search_window.geometry("400x200")
