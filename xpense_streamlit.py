@@ -166,7 +166,7 @@ if st.session_state.userid is None:
 st.sidebar.header(f"Welcome, {st.session_state.userid}!")
 if st.sidebar.button("Logout"):
     st.session_state.userid = None
-    st.experimental_rerun()
+    st.rerun()
 
 tab1, tab2 = st.tabs(["🏠 Home", "📊 Graph"])
 
