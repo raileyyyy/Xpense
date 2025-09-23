@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 
 df = pd.read_csv("salesmen.csv")
 df["Date"] = pd.to_datetime(df["Date"])
@@ -17,6 +18,64 @@ def annotate_bars(ax):
         ax.annotate(f'{int(p.get_height())}', 
                     (p.get_x() + p.get_width() / 2, p.get_height()), 
                     ha='center', va='bottom', fontsize=9, color='black')
+
+# --- General Overview ---
+print("\nGeneral Overview")
+print(f"  • Total records (days): {len(df)}")
+print(f"  • Number of salesmen: {df['Salesman'].nunique()}")
+print(f"  • Total revenue generated: {df['Revenue'].sum():,}")
+print(f"  • Average daily revenue (all salesmen): ≈ {df['Revenue'].mean():,.2f}")
+print(f"  • Maximum single-day revenue: {df['Revenue'].max():,}")
+print(f"  • Minimum single-day revenue: {df['Revenue'].min():,}")
+
+# --- Salesmen Performance Table ---
+perf = df.groupby("Salesman").agg(
+    Total_Revenue=("Revenue", "sum"),
+    Avg_Daily_Revenue=("Revenue", "mean"),
+    Max_Revenue=("Revenue", "max"),
+    Min_Revenue=("Revenue", "min")
+).sort_values("Total_Revenue", ascending=False)
+
+print("\nSalesmen Performance (Top 5)")
+print(perf)
+
+# --- Highlights ---
+print(f"\n• {perf.index[0]} generated the highest total revenue.")
+print(f"• {perf.index[-1]} had the lowest overall performance.")
+print(f"• Revenues per day vary widely (from as low as {df['Revenue'].min()} to nearly {df['Revenue'].max()}).\n")
+
+# --- General Overview Visualization ---
+fig, ax = plt.subplots()
+total_revenue = perf["Total_Revenue"]
+colors = [salesman_colors[salesman] for salesman in total_revenue.index]
+bars = ax.bar(total_revenue.index, total_revenue.values, color=colors)
+for bar in bars:
+    ax.annotate(f'{int(bar.get_height()):,}', 
+                (bar.get_x() + bar.get_width() / 2, bar.get_height()), 
+                ha='center', va='bottom', fontsize=10, color='black')
+plt.title("Total Revenue per Salesman (2025)")
+plt.ylabel("Total Revenue")
+plt.xlabel("Salesman")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, p: f'{int(x):,}'))
+plt.tight_layout()
+plt.show()
+
+# --- Salesmen Performance Table Visualization ---
+fig, ax = plt.subplots(figsize=(8, 2))
+ax.axis('off')
+table_data = perf.reset_index()
+table = ax.table(
+    cellText=table_data.values,
+    colLabels=table_data.columns,
+    cellLoc='center',
+    loc='center'
+)
+table.auto_set_font_size(False)
+table.set_fontsize(10)
+table.auto_set_column_width(col=list(range(len(table_data.columns))))
+plt.title("Salesmen Performance Table (2025)", pad=20)
+plt.tight_layout()
+plt.show()
 
 # Q0: Weekly revenue (July 14–20, 2025)
 print()
