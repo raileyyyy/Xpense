@@ -14,7 +14,7 @@ conn = mysql.connector.connect(
     user="root",
     host="localhost",
     password="",
-    port=3307,
+    port=3306,
 )
 
 def fetch_expense_data(userid):
@@ -57,6 +57,10 @@ def logout_confirmation():
 
 def second_page(userid):
     clear_window()
+
+    # Pagination Variables
+    records_per_page = 20
+    current_page = [0]  
     
     # Variables to store references
     table_data = []
@@ -164,21 +168,33 @@ def second_page(userid):
         table_frame = ctk.CTkFrame(home_tab, fg_color=DARK_COLOR)
         table_frame.pack(fill="both", expand=True, padx=10, pady=5)
         
-        # Create scrollable frame for table with improved styling
-        table_scroll = ctk.CTkScrollableFrame(table_frame, height=250, fg_color=DARKEST_COLOR, 
-                                            border_width=1, border_color="#666666")
-        table_scroll.pack(fill="both", expand=True, padx=10, pady=10)
+        # # Create scrollable frame for table with improved styling
+        # table_scroll = ctk.CTkScrollableFrame(table_frame, height=250, fg_color=DARKEST_COLOR, 
+        #                                     border_width=1, border_color="#666666")
+        # table_scroll.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # Table headers with new color scheme
+        # Table headers with new color scheme (sticky)
         headers = ["ID", "Title", "Amount", "Category", "Comment"]
-        header_frame = ctk.CTkFrame(table_scroll, fg_color=SECONDARY_COLOR, 
-                                   border_width=1, border_color="#666666")
-        header_frame.pack(fill="x", pady=(0, 2))
-        
+        header_frame = ctk.CTkFrame(table_frame, fg_color=SECONDARY_COLOR, 
+                                border_width=1, border_color="#666666")
+        header_frame.pack(fill="x", padx=10, pady=(0, 2))
+
         for i, header in enumerate(headers):
             label = ctk.CTkLabel(header_frame, text=header, font=("Arial", 12, "bold"), 
-                               text_color="#FFFFFF", width=100)
+                                text_color="#FFFFFF", width=100)
             label.grid(row=0, column=i, padx=2, pady=8, sticky="ew")
+
+        for i in range(len(headers)):
+            header_frame.grid_columnconfigure(i, weight=1)
+
+        # Scrollable table (rows only, no header inside)
+        table_scroll = ctk.CTkScrollableFrame(table_frame, height=250, fg_color=DARKEST_COLOR, 
+                                            border_width=1, border_color="#666666")
+        table_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        # Sticky pagination frame (always visible below the table)
+        pagination_frame = ctk.CTkFrame(table_frame, fg_color="transparent")
+        pagination_frame.pack(fill="x", padx=10, pady=(0, 10))
         
         # Configure grid weights
         for i in range(len(headers)):
@@ -196,7 +212,7 @@ def second_page(userid):
         # Left side buttons
         show_all_btn = ctk.CTkButton(top_buttons, text="Show All", width=100, 
                                     fg_color=PRIMARY_COLOR, hover_color=SECONDARY_COLOR,
-                                    command=load_table_data)
+                                    command=lambda: load_table_data(current_page[0]))
         show_all_btn.pack(side="left", padx=5)
         
         search_btn = ctk.CTkButton(top_buttons, text="Search", width=100,
@@ -224,7 +240,7 @@ def second_page(userid):
                                      width=160, command=remove_all_records)
         remove_all_btn.pack(side="right", padx=5)
         
-        return table_scroll, title_entry, price_entry, category_combobox, comment_entry
+        return table_scroll, title_entry, price_entry, category_combobox, comment_entry, pagination_frame
     
     # --- Pandas-based sorting and exporting ---
     def sort_expenses(df, column="amount", ascending=False):
@@ -356,10 +372,7 @@ def second_page(userid):
         # Chart section (replace CTkFrame with CTkScrollableFrame)
         chart_container = ctk.CTkScrollableFrame(main_container, fg_color=DARK_COLOR)
         chart_container.pack(fill="both", expand=True)
-        # Chart title
-        title_label = ctk.CTkLabel(chart_container, text="📊 Expense Distribution", 
-                                font=("Arial", 16, "bold"), text_color="white")
-        title_label.pack(pady=(20, 10))
+
         return chart_container, summary_frame
     
     def calculate_balance():
@@ -431,7 +444,7 @@ def second_page(userid):
             category_combobox.set("")
             comment_entry.delete(0, ctk.END)
             
-            load_table_data()
+            load_table_data(current_page[0])
             update_chart()
             calculate_balance()
             
@@ -445,40 +458,46 @@ def second_page(userid):
         except Exception as e:
             tk.messagebox.showerror("Error", f"Database error: {str(e)}")
     
-    def load_table_data():
-        """Load data into the table with new color scheme"""
+    def load_table_data(page=0):
+        """Load data into the table with pagination and improved styling"""
         nonlocal table_data
         # Clear existing data
-        for widget in table_scroll.winfo_children()[1:]:  # Keep header
+        for widget in table_scroll.winfo_children():  # Keep header
             widget.destroy()
-        
+
         cur = conn.cursor()
         try:
-            cur.execute("SELECT id, title, expense_type, amount, comment FROM expense WHERE userid = %s ORDER BY id DESC LIMIT 20", (userid,))
+            cur.execute("SELECT COUNT(*) FROM expense WHERE userid = %s", (userid,))
+            total_records = cur.fetchone()[0]
+            total_pages = max(1, (total_records + records_per_page - 1) // records_per_page)
+
+            offset = page * records_per_page
+            cur.execute(
+                "SELECT id, title, expense_type, amount, comment FROM expense WHERE userid = %s ORDER BY id DESC LIMIT %s OFFSET %s",
+                (userid, records_per_page, offset)
+            )
             rows = cur.fetchall()
             table_data = rows
-            
+
             for i, row in enumerate(rows):
                 # Alternating row colors: even = DARK_COLOR, odd = DARKER_COLOR
                 row_bg_color = DARK_COLOR if i % 2 == 0 else DARKER_COLOR
-                
-                row_frame = ctk.CTkFrame(table_scroll, fg_color=row_bg_color, 
-                                       border_width=1, border_color="#666666")
+
+                row_frame = ctk.CTkFrame(table_scroll, fg_color=row_bg_color,
+                                        border_width=1, border_color="#666666")
                 row_frame.pack(fill="x", pady=1)
-                
+
                 # Make row clickable
                 def on_row_click(record_id=row[0], row_index=i):
                     nonlocal selected_record_id
                     selected_record_id = record_id
                     # Highlight selected row with PRIMARY_COLOR
-                    for j, widget in enumerate(table_scroll.winfo_children()[1:]):
+                    for j, widget in enumerate(table_scroll.winfo_children()[1:]):  # Exclude header
                         if j == row_index:
                             widget.configure(fg_color=PRIMARY_COLOR)
-                            # Update all labels in the selected row to white text
                             for child in widget.winfo_children():
                                 if isinstance(child, ctk.CTkLabel):
                                     if "Amount" not in child.cget("text") or (j == row_index and "₱" in child.cget("text")):
-                                        # Keep amount color coding but ensure visibility
                                         if "₱" in child.cget("text"):
                                             if row[2] in ['Income', 'Allowance']:
                                                 child.configure(text_color="#2ECC71")
@@ -487,44 +506,84 @@ def second_page(userid):
                                         else:
                                             child.configure(text_color="#FFFFFF")
                         else:
-                            # Reset to alternating colors
                             original_bg = DARK_COLOR if j % 2 == 0 else DARKER_COLOR
                             widget.configure(fg_color=original_bg)
-                            # Reset text colors
                             for child in widget.winfo_children():
                                 if isinstance(child, ctk.CTkLabel):
                                     child.configure(text_color="#FFFFFF")
-                
+
                 row_frame.bind("<Button-1>", lambda e, record_id=row[0], row_index=i: on_row_click(record_id, row_index))
-                
+
                 # Display: ID, Title, Amount, Category, Comment
-                # Color coding for income vs expenses (only for amount column)
-                amount_color = "#FFFFFF"  
+                amount_color = "#FFFFFF"
                 if row[2] in ['Income', 'Allowance']:
                     amount_display = f"+₱{row[3]:,.2f}"
-                    amount_color = "#2ECC71"  # Green for income
+                    amount_color = "#2ECC71"
                 else:
                     amount_display = f"-₱{row[3]:,.2f}"
-                    amount_color = "#E74C3C"  # Red for expenses
-                
-                data = [str(row[0]), row[1][:20] + "..." if len(row[1]) > 20 else row[1], 
-                       amount_display, row[2], (row[4] or "No comment")[:15] + "..." if row[4] and len(row[4]) > 15 else (row[4] or "No comment")]
-                
+                    amount_color = "#E74C3C"
+
+                data = [
+                    str(row[0]),
+                    row[1][:20] + "..." if len(row[1]) > 20 else row[1],
+                    amount_display,
+                    row[2],
+                    (row[4] or "No comment")[:15] + "..." if row[4] and len(row[4]) > 15 else (row[4] or "No comment")
+                ]
+
                 for j, value in enumerate(data):
                     if j == 2:  # Amount column
-                        label = ctk.CTkLabel(row_frame, text=value, font=("Arial", 10, "bold"), 
-                                           text_color=amount_color, width=100)
+                        label = ctk.CTkLabel(row_frame, text=value, font=("Arial", 10, "bold"),
+                                            text_color=amount_color, width=100)
                     else:
-                        label = ctk.CTkLabel(row_frame, text=value, font=("Arial", 10), 
-                                           text_color="#FFFFFF", width=100)  # White text for all other columns
+                        label = ctk.CTkLabel(row_frame, text=value, font=("Arial", 10),
+                                            text_color="#FFFFFF", width=100)
                     label.grid(row=0, column=j, padx=2, pady=6, sticky="ew")
                     label.bind("<Button-1>", lambda e, record_id=row[0], row_index=i: on_row_click(record_id, row_index))
-                
-                # Configure grid weights
+
                 for j in range(len(data)):
                     row_frame.grid_columnconfigure(j, weight=1)
+
+            # Sticky pagination controls (clear and re-create)
+            for widget in pagination_frame.winfo_children():
+                widget.destroy()
+
+            prev_btn = ctk.CTkButton(
+                pagination_frame, text="Previous", width=80,
+                command=lambda: go_to_page(page - 1),
+                state="normal" if page > 0 else "disabled"
+            )
+            prev_btn.pack(side="left", padx=5)
+
+            page_label = ctk.CTkLabel(
+                pagination_frame,
+                text=f"Page {page + 1} of {total_pages}",
+                font=("Arial", 11, "bold"),
+                text_color="white"
+            )
+            page_label.pack(side="left", padx=10)
+
+            next_btn = ctk.CTkButton(
+                pagination_frame, text="Next", width=80,
+                command=lambda: go_to_page(page + 1),
+                state="normal" if page < total_pages - 1 else "disabled"
+            )
+            next_btn.pack(side="left", padx=5)
+
         except Exception as e:
             print(f"Error loading table data: {e}")
+        
+        # Scroll to top after loading new page
+        try:
+            table_scroll._parent_canvas.yview_moveto(0)
+        except Exception:
+            pass
+
+    def go_to_page(page):
+        if page < 0:
+            page = 0
+        current_page[0] = page
+        load_table_data(page)
     
     def search_records():
         """Search functionality"""
@@ -625,7 +684,7 @@ def second_page(userid):
             category_combobox.set("")
             comment_entry.delete(0, ctk.END)
             
-            load_table_data()
+            load_table_data(current_page[0])
             update_chart()
             calculate_balance()
             tk.messagebox.showinfo("Success", "Record updated successfully!")
@@ -647,7 +706,7 @@ def second_page(userid):
                 cur.execute("DELETE FROM expense WHERE id = %s", (selected_record_id,))
                 conn.commit()
                 
-                load_table_data()
+                load_table_data(current_page[0])
                 update_chart()
                 calculate_balance()
                 tk.messagebox.showinfo("Success", "Record removed successfully!")
@@ -663,7 +722,7 @@ def second_page(userid):
                 cur.execute("DELETE FROM expense WHERE userid = %s", (userid,))
                 conn.commit()
                 
-                load_table_data()
+                load_table_data(current_page[0])
                 update_chart()
                 calculate_balance()
                 tk.messagebox.showinfo("Success", "All records removed successfully!")
@@ -704,7 +763,7 @@ def second_page(userid):
                 split_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
                 # Left frame: Pie chart (70%)
-                left_frame = ctk.CTkFrame(split_frame, fg_color=DARK_COLOR, width=700)
+                left_frame = ctk.CTkFrame(split_frame, fg_color=DARK_COLOR, width=900, height =400)
                 left_frame.pack(side="left", fill="both", expand=True)
                 left_frame.pack_propagate(False)
 
@@ -713,8 +772,13 @@ def second_page(userid):
                 right_frame.pack(side="right", fill="y")
                 right_frame.pack_propagate(False)
 
+                # --- Title above the pie chart, centered in left_frame ---
+                pie_title = ctk.CTkLabel(left_frame, text="📊 Expense Distribution", font=("Arial", 16, "bold"), text_color="white")
+                pie_title.pack(pady=(10, 10))
+
+
                 # Pie chart (no legend inside chart)
-                fig, ax = plt.subplots(figsize=(10, 10), facecolor=DARK_COLOR)
+                fig, ax = plt.subplots(figsize=(12, 10), facecolor=DARK_COLOR)
                 ax.set_facecolor(DARK_COLOR)
                 wedges, texts = ax.pie(
                     sizes,
@@ -751,10 +815,10 @@ def second_page(userid):
                 canvas.mpl_connect("motion_notify_event", on_motion)
 
                 # Legend on right frame (all visible, scrollable if needed)
-                legend_title = ctk.CTkLabel(right_frame, text="Expense Categories", font=("Arial", 14, "bold"), text_color="white")
+                legend_title = ctk.CTkLabel(right_frame, text="🗂️ Expense Categories", font=("Arial", 14, "bold"), text_color="white")
                 legend_title.pack(pady=(20, 10))
 
-                legend_scroll = ctk.CTkScrollableFrame(right_frame, fg_color=DARK_COLOR, width=280, height=300)
+                legend_scroll = ctk.CTkScrollableFrame(right_frame, fg_color=DARK_COLOR, width=300, height=300)
                 legend_scroll.pack(fill="both", expand=True, padx=10, pady=10)
 
                 for i, (label, size) in enumerate(zip(labels, sizes)):
@@ -927,11 +991,11 @@ def second_page(userid):
             error_label.pack(expand=True)
     
     # Setup tabs
-    table_scroll, title_entry, price_entry, category_combobox, comment_entry = setup_home_tab()
+    table_scroll, title_entry, price_entry, category_combobox, comment_entry, pagination_frame = setup_home_tab()
     chart_frame, balance_frame = setup_graph_tab()
     
     # Load initial data
-    load_table_data()
+    load_table_data(current_page[0])
     update_chart()
     calculate_balance()
 
