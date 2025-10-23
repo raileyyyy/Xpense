@@ -3,7 +3,10 @@ import customtkinter as ctk
 # from PIL import ImageTk, Image
 import mysql.connector
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 from datetime import datetime
 
 conn = mysql.connector.connect(
@@ -13,6 +16,22 @@ conn = mysql.connector.connect(
     password="",
     port=3307,
 )
+
+# --- Add the function here ---
+def fetch_expense_data(userid):
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, userid, date, title, expense_type, amount, comment
+        FROM expense
+        WHERE userid = %s
+        ORDER BY date ASC
+    """, (userid,))
+    rows = cur.fetchall()
+    columns = [desc[0] for desc in cur.description]
+    df = pd.DataFrame(rows, columns=columns)
+    # Ensure 'date' is datetime
+    df['date'] = pd.to_datetime(df['date'])
+    return df
 
 app = ctk.CTk()
 ctk.set_appearance_mode("dark")
@@ -208,6 +227,64 @@ def second_page(userid):
         
         return table_scroll, title_entry, price_entry, category_combobox, comment_entry
     
+    # --- Pandas-based sorting and exporting ---
+    def sort_expenses(df, column="amount", ascending=False):
+        """Sort expenses DataFrame by a column."""
+        return df.sort_values(by=column, ascending=ascending)
+
+    def export_expenses(df, filename="expenses_export.csv"):
+        """Export expenses DataFrame to CSV."""
+        df.to_csv(filename, index=False)
+        tk.messagebox.showinfo("Export", f"Data exported to {filename}")
+
+    def filter_expenses_by_period(df, period="month"):
+        """Filter expenses DataFrame by time period."""
+        now = pd.Timestamp.now()
+        if period == "day":
+            return df[df['date'].dt.date == now.date()]
+        elif period == "week":
+            return df[df['date'] >= now - pd.Timedelta(days=7)]
+        elif period == "month":
+            return df[df['date'].dt.month == now.month]
+        elif period == "quarter":
+            return df[df['date'].dt.quarter == now.quarter]
+        elif period == "halfyear":
+            # Jan-Jun if current month <= 6, else Jul-Dec
+            if now.month <= 6:
+                return df[df['date'].dt.month.isin(range(1, 7))]
+            else:
+                return df[df['date'].dt.month.isin(range(7, 13))]
+        elif period == "year":
+            return df[df['date'].dt.year == now.year]
+        else:
+            return df
+
+    # --- Export & Sort UI for Home Tab ---
+    export_frame = ctk.CTkFrame(home_tab, fg_color="transparent")
+    export_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+    ctk.CTkLabel(export_frame, text="Export Expenses:", font=("Arial", 12, "bold"), text_color="white").pack(side="left", padx=(0,10))
+
+    # Dropdown for period selection
+    export_periods = ["Day", "Week", "Month", "Quarter", "Half-Year", "Year"]
+    export_dropdown = ctk.CTkComboBox(export_frame, values=export_periods, width=120)
+    export_dropdown.set("Month")  # Default
+    export_dropdown.pack(side="left", padx=2)
+
+    # Export button
+    def export_selected_period():
+        period = export_dropdown.get().lower().replace("-", "").replace(" ", "")
+        df = fetch_expense_data(userid)
+        filtered = filter_expenses_by_period(df, period)
+        export_expenses(filtered, f"expenses_{period}.csv")
+    ctk.CTkButton(export_frame, text="Export", command=export_selected_period, width=90).pack(side="left", padx=10)
+
+    # Download CSV of current table
+    def download_table_csv():
+        df = fetch_expense_data(userid)
+        export_expenses(df, "expenses_table.csv")
+    ctk.CTkButton(export_frame, text="Download CSV", command=download_table_csv, width=120).pack(side="left", padx=10)
+    
     # ==================== GRAPH TAB ====================
     def setup_graph_tab():
         # Configure the tab background
@@ -357,7 +434,7 @@ def second_page(userid):
             cur = conn.cursor()
             cur.execute(
                 "INSERT INTO expense (userid, date, title, expense_type, amount, comment) VALUES (%s, %s, %s, %s, %s, %s)",
-                (userid, datetime.now().strftime("%Y-%m-%d"), title, category, amount, comment),
+                (userid, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), title, category, amount, comment),
             )
             conn.commit()
             
@@ -608,24 +685,25 @@ def second_page(userid):
                 tk.messagebox.showerror("Error", f"Database error: {str(e)}")
     
     def update_chart():
-        """Update the pie chart with a 70/30 split layout: left=graph, right=legend, all text visible"""
+        """Update the pie chart and line graph for expense distribution and balance trend."""
         # Clear existing chart
         for widget in chart_frame.winfo_children()[1:]:  # Keep title
             widget.destroy()
 
         cur = conn.cursor()
         try:
+            # --- PIE CHART: Expense Distribution ---
             cur.execute(
                 "SELECT expense_type, SUM(amount) FROM expense WHERE userid = %s AND expense_type NOT IN ('Income', 'Allowance') GROUP BY expense_type",
                 (userid,))
             data = cur.fetchall()
 
-            if data:
-                labels = []
-                sizes = []
-                colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57',
-                        '#A569BD', '#F39C12', '#E74C3C', '#3498DB', '#2ECC71']
+            labels = []
+            sizes = []
+            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57',
+                    '#A569BD', '#F39C12', '#E74C3C', '#3498DB', '#2ECC71']
 
+            if data:
                 for i, (category, amount) in enumerate(data):
                     labels.append(category)
                     sizes.append(float(amount))
@@ -665,6 +743,23 @@ def second_page(userid):
                 canvas.draw()
                 canvas.get_tk_widget().pack(expand=True, fill="both", padx=10, pady=10)
 
+                # --- Tooltip for Pie Chart ---
+                tooltip = tk.Label(left_frame, bg="#222", fg="white", font=("Arial", 11), bd=1, relief="solid")
+                tooltip.place_forget()
+
+                def on_motion(event):
+                    found = False
+                    for i, wedge in enumerate(wedges):
+                        if wedge.contains_point([event.x, event.y]):
+                            tooltip.config(text=f"{labels[i]}: ₱{sizes[i]:,.2f}")
+                            tooltip.place(x=event.x + 10, y=event.y + 10)
+                            found = True
+                            break
+                    if not found:
+                        tooltip.place_forget()
+
+                canvas.mpl_connect("motion_notify_event", on_motion)
+
                 # Legend on right frame (all visible, scrollable if needed)
                 legend_title = ctk.CTkLabel(right_frame, text="Expense Categories", font=("Arial", 14, "bold"), text_color="white")
                 legend_title.pack(pady=(20, 10))
@@ -685,11 +780,96 @@ def second_page(userid):
                         anchor="w"
                     )
                     legend_label.pack(side="left", fill="x", expand=True)
-
             else:
                 no_data_label = ctk.CTkLabel(chart_frame, text="No expense data available\nAdd some expenses to see the chart",
                                             font=("Arial", 16), text_color="white")
                 no_data_label.pack(expand=True)
+
+            # --- LINE GRAPH: Balance Trend ---
+            # Fetch daily net changes
+            cur.execute("""
+                SELECT date, amount, expense_type
+                FROM expense
+                WHERE userid = %s
+                ORDER BY date ASC, id ASC
+            """, (userid,))
+            records = cur.fetchall()
+
+            if records:
+                dates = []
+                balances = []
+                total = 0.0
+                for row in records:
+                    dt = datetime.strptime(str(row[0]), "%Y-%m-%d %H:%M:%S")
+                    amount = float(row[1])
+                    if row[2] in ('Income', 'Allowance'):
+                        total += amount
+                    else:
+                        total -= amount
+                    dates.append(dt)
+                    balances.append(total)
+
+                fig2, ax2 = plt.subplots(figsize=(7, 3), facecolor=DARK_COLOR)
+                ax2.set_facecolor(DARK_COLOR)
+                ax2.plot(
+                    dates,
+                    balances,
+                    marker='o',
+                    markersize=8,
+                    markerfacecolor='#39ace7',
+                    markeredgecolor='white',
+                    color='#39ace7',
+                    linewidth=2,
+                    label='Balance'
+                )
+                ax2.axhline(0, color='#E74C3C', linestyle='--', linewidth=2, label='Limit (₱0)')
+                ax2.set_title("Balance Trend", color='white', fontsize=14, weight='bold')
+                ax2.set_ylabel("Balance (₱)", color='white')
+                ax2.set_xlabel("Date", color='white')
+                ax2.tick_params(axis='x', labelrotation=45, colors='white')
+                ax2.tick_params(axis='y', colors='white')
+                ax2.legend(facecolor=DARK_COLOR, edgecolor='white', fontsize=10)
+                ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+                ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+                fig2.autofmt_xdate()
+                fig2.tight_layout()
+
+                canvas2 = FigureCanvasTkAgg(fig2, master=chart_frame)
+                canvas2.draw()
+                canvas2.get_tk_widget().pack(expand=False, fill="x", padx=10, pady=(0, 10))
+
+                # Add interactive toolbar below the line graph
+                toolbar = NavigationToolbar2Tk(canvas2, chart_frame)
+                toolbar.update()
+                toolbar.pack(fill="x", padx=10, pady=(0, 10))
+
+                # --- Tooltip for Line Graph ---
+                tooltip_line = tk.Label(chart_frame, bg="#222", fg="white", font=("Arial", 11), bd=1, relief="solid")
+                tooltip_line.place_forget()
+
+                def on_line_motion(event):
+                    found = False
+                    if event.inaxes == ax2:
+                        mouse_x, mouse_y = event.xdata, event.ydata
+                        if mouse_x is not None and mouse_y is not None:
+                            for i, (x, y) in enumerate(zip(dates, balances)):
+                                x_val = ax2.transData.transform((mdates.date2num(x), float(y)))
+                                mouse_val = (event.x, event.y)
+                                dist = ((x_val[0] - mouse_val[0]) ** 2 + (x_val[1] - mouse_val[1]) ** 2) ** 0.5
+                                if dist < 20:
+                                    tooltip_line.config(text=f"{x.strftime('%Y-%m-%d')}: ₱{y:,.2f}")
+                                    tooltip_line.place(x=event.x + 10, y=event.y + 10)
+                                    found = True
+                                    break
+                    if not found:
+                        tooltip_line.place_forget()
+
+                canvas2.mpl_connect("motion_notify_event", on_line_motion)
+
+            else:
+                no_data_label2 = ctk.CTkLabel(chart_frame, text="No balance trend data available.",
+                                            font=("Arial", 12), text_color="white")
+                no_data_label2.pack()
         except Exception as e:
             error_label = ctk.CTkLabel(chart_frame, text=f"Error loading chart: {str(e)}",
                                     font=("Arial", 16), text_color="#E74C3C")
@@ -908,5 +1088,9 @@ def first_page():
     signup_btn.pack()
 
 # Start the application
-first_page()
-app.mainloop()
+if __name__ == "__main__":
+    try:
+        first_page()
+        app.mainloop()
+    except (KeyboardInterrupt, tk.TclError):
+        pass
