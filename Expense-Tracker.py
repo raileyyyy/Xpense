@@ -27,7 +27,7 @@ def fetch_expense_data(userid):
     """, (userid,))
     rows = cur.fetchall()
     columns = [desc[0] for desc in cur.description]
-    df = pd.DataFrame(rows, columns=columns)
+    df = pd.DataFrame(rows, columns=columns)    
     # Ensure 'date' is datetime
     df['date'] = pd.to_datetime(df['date'])
     return df
@@ -35,7 +35,7 @@ def fetch_expense_data(userid):
 app = ctk.CTk()
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
-app.geometry("1000x700")
+app.geometry("1440x820")
 app.title("Xpense")
 
 # Custom color palette
@@ -295,71 +295,61 @@ def second_page(userid):
         
         # Financial Summary at the top
         summary_frame = ctk.CTkFrame(main_container, height=120, fg_color=DARK_COLOR)
-        summary_frame.pack(fill="x", pady=(0, 15))
+        summary_frame.pack(fill="x", padx=20, pady=(0, 15))
         summary_frame.pack_propagate(False)
-        
+
         # Title
         summary_title = ctk.CTkLabel(summary_frame, text="💰 Financial Summary", 
                                     font=("Arial", 18, "bold"), text_color="white")
-        summary_title.pack(pady=(10, 5))
-        
-        # Summary content frame
-        summary_content = ctk.CTkFrame(summary_frame, fg_color="transparent")
-        summary_content.pack(fill="x", padx=20, pady=(0, 10))
-        
-        # Total Income + Allowance
-        income_frame = ctk.CTkFrame(summary_content, fg_color=DARKER_COLOR, width=200)
-        income_frame.pack(side="left", padx=10, fill="y")
-        income_frame.pack_propagate(False)
-        
-        income_title = ctk.CTkLabel(income_frame, text="💵 Total Income + Allowance", 
-                                   font=("Arial", 11, "bold"), text_color="#2ECC71")
+        summary_title.pack(pady=(10, 0))
+
+        # Card container for summary cards
+        card_container = ctk.CTkFrame(summary_frame, fg_color="transparent")
+        card_container.pack(fill="x", expand=True, padx=10, pady=10)
+
+        # Each card (even gaps, fills container)
+        income_card = ctk.CTkFrame(card_container, fg_color=DARKER_COLOR)
+        income_card.pack(side="left", fill="both", expand=True, padx=10)
+        expense_card = ctk.CTkFrame(card_container, fg_color=DARKER_COLOR)
+        expense_card.pack(side="left", fill="both", expand=True, padx=10)
+        calc_card = ctk.CTkFrame(card_container, fg_color=DARKER_COLOR)
+        calc_card.pack(side="left", fill="both", expand=True, padx=10)
+        balance_card = ctk.CTkFrame(card_container, fg_color=DARKER_COLOR)
+        balance_card.pack(side="left", fill="both", expand=True, padx=10)
+
+        # Income Card
+        income_title = ctk.CTkLabel(income_card, text="💵 Total Income + Allowance", 
+                                    font=("Arial", 11, "bold"), text_color="#2ECC71")
         income_title.pack(pady=(8, 3))
-        
         global income_label
-        income_label = ctk.CTkLabel(income_frame, text="₱0.00", 
-                                   font=("Arial", 14, "bold"), text_color="white")
+        income_label = ctk.CTkLabel(income_card, text="₱0.00", 
+                                    font=("Arial", 14, "bold"), text_color="white")
         income_label.pack(pady=(0, 8))
-        
-        # Total Expenses
-        expense_frame = ctk.CTkFrame(summary_content, fg_color=DARKER_COLOR, width=200)
-        expense_frame.pack(side="left", padx=10, fill="y")
-        expense_frame.pack_propagate(False)
-        
-        expense_title = ctk.CTkLabel(expense_frame, text="💸 Total Expenses", 
+
+        # Expense Card
+        expense_title = ctk.CTkLabel(expense_card, text="💸 Total Expenses", 
                                     font=("Arial", 11, "bold"), text_color="#E74C3C")
         expense_title.pack(pady=(8, 3))
-        
         global expense_label
-        expense_label = ctk.CTkLabel(expense_frame, text="₱0.00", 
+        expense_label = ctk.CTkLabel(expense_card, text="₱0.00", 
                                     font=("Arial", 14, "bold"), text_color="white")
         expense_label.pack(pady=(0, 8))
-        
-        # Calculation display
-        calculation_frame = ctk.CTkFrame(summary_content, fg_color=DARKER_COLOR, width=300)
-        calculation_frame.pack(side="left", padx=10, fill="y")
-        calculation_frame.pack_propagate(False)
-        
-        calc_title = ctk.CTkLabel(calculation_frame, text="🧮 Calculation", 
-                                 font=("Arial", 11, "bold"), text_color="#F39C12")
+
+        # Calculation Card
+        calc_title = ctk.CTkLabel(calc_card, text="🧮 Calculation", 
+                                font=("Arial", 11, "bold"), text_color="#F39C12")
         calc_title.pack(pady=(8, 3))
-        
         global calculation_label
-        calculation_label = ctk.CTkLabel(calculation_frame, text="₱0.00 - ₱0.00 = ₱0.00", 
+        calculation_label = ctk.CTkLabel(calc_card, text="₱0.00 - ₱0.00 = ₱0.00", 
                                         font=("Arial", 12, "bold"), text_color="white")
         calculation_label.pack(pady=(0, 8))
-        
-        # Available Balance
-        balance_frame = ctk.CTkFrame(summary_content, fg_color=DARKER_COLOR, width=200)
-        balance_frame.pack(side="left", padx=10, fill="y")
-        balance_frame.pack_propagate(False)
-        
-        balance_title = ctk.CTkLabel(balance_frame, text="💳 Available Balance", 
+
+        # Balance Card
+        balance_title = ctk.CTkLabel(balance_card, text="💳 Available Balance", 
                                     font=("Arial", 11, "bold"), text_color="#9B59B6")
         balance_title.pack(pady=(8, 3))
-        
         global balance_label
-        balance_label = ctk.CTkLabel(balance_frame, text="₱0.00", 
+        balance_label = ctk.CTkLabel(balance_card, text="₱0.00", 
                                     font=("Arial", 14, "bold"), text_color="white")
         balance_label.pack(pady=(0, 8))
         
@@ -707,6 +697,10 @@ def second_page(userid):
                     labels.append(category)
                     sizes.append(float(amount))
 
+                if len(labels) > len(colors):
+                    import itertools
+                    colors = list(itertools.islice(itertools.cycle(colors), len(labels)))
+
                 # Main horizontal frame for split layout
                 split_frame = ctk.CTkFrame(chart_frame, fg_color=DARKER_COLOR)
                 split_frame.pack(fill="both", expand=True, padx=20, pady=20)
@@ -722,20 +716,19 @@ def second_page(userid):
                 right_frame.pack_propagate(False)
 
                 # Pie chart (no legend inside chart)
-                fig, ax = plt.subplots(figsize=(6, 6), facecolor=DARK_COLOR)
+                fig, ax = plt.subplots(figsize=(10, 10), facecolor=DARK_COLOR)
                 ax.set_facecolor(DARK_COLOR)
-                wedges, texts, autotexts = ax.pie(
+                wedges, texts = ax.pie(
                     sizes,
-                    labels=labels,
+                    labels=None,
                     colors=colors[:len(labels)],
-                    autopct='%1.1f%%',
+                    autopct=None,
                     startangle=90,
-                    textprops={'color': 'white', 'fontsize': 11, 'weight': 'bold'},
-                    explode=[0.05] * len(labels),
                     shadow=True,
+                    explode=[0.05] * len(labels),
                     wedgeprops={'linewidth': 2, 'edgecolor': 'white'}
                 )
-                ax.set_title("Expense Distribution", color='white', fontsize=16, weight='bold', pad=30)
+                ax.set_title("", pad=0)
                 plt.tight_layout()
 
                 canvas = FigureCanvasTkAgg(fig, master=left_frame)
@@ -785,6 +778,14 @@ def second_page(userid):
                 no_data_label.pack(expand=True)
 
             # --- LINE GRAPH: Balance Trend ---
+            # Create a dedicated frame for the line chart
+            balance_trend_frame = ctk.CTkFrame(chart_frame, fg_color=DARK_COLOR)
+            balance_trend_frame.pack(fill="x", padx=20, pady=(0, 10))
+
+            # Centered header
+            balance_header = ctk.CTkLabel(balance_trend_frame, text="📈 Balance Trend", font=("Arial", 18, "bold"), text_color="white")
+            balance_header.pack(pady=(10, 0), fill="x")
+
             # Fetch daily net changes
             cur.execute("""
                 SELECT date, amount, expense_type
@@ -822,7 +823,7 @@ def second_page(userid):
                     label='Balance'
                 )
                 ax2.axhline(0, color='#E74C3C', linestyle='--', linewidth=2, label='Limit (₱0)')
-                ax2.set_title("Balance Trend", color='white', fontsize=14, weight='bold')
+                ax2.set_title("", pad=0)  # Remove matplotlib title, use CTk header
                 ax2.set_ylabel("Balance (₱)", color='white')
                 ax2.set_xlabel("Date", color='white')
                 ax2.tick_params(axis='x', labelrotation=45, colors='white')
@@ -833,17 +834,17 @@ def second_page(userid):
                 fig2.autofmt_xdate()
                 fig2.tight_layout()
 
-                canvas2 = FigureCanvasTkAgg(fig2, master=chart_frame)
+                canvas2 = FigureCanvasTkAgg(fig2, master=balance_trend_frame)
                 canvas2.draw()
-                canvas2.get_tk_widget().pack(expand=False, fill="x", padx=10, pady=(0, 10))
+                canvas2.get_tk_widget().pack(expand=True, fill="both", padx=10, pady=10)
 
                 # Add interactive toolbar below the line graph
-                toolbar = NavigationToolbar2Tk(canvas2, chart_frame)
+                toolbar = NavigationToolbar2Tk(canvas2, balance_trend_frame)
                 toolbar.update()
                 toolbar.pack(fill="x", padx=10, pady=(0, 10))
 
                 # --- Tooltip for Line Graph ---
-                tooltip_line = tk.Label(chart_frame, bg="#222", fg="white", font=("Arial", 11), bd=1, relief="solid")
+                tooltip_line = tk.Label(balance_trend_frame, bg="#222", fg="white", font=("Arial", 11), bd=1, relief="solid")
                 tooltip_line.place_forget()
 
                 def on_line_motion(event):
@@ -866,7 +867,7 @@ def second_page(userid):
                 canvas2.mpl_connect("motion_notify_event", on_line_motion)
 
             else:
-                no_data_label2 = ctk.CTkLabel(chart_frame, text="No balance trend data available.",
+                no_data_label2 = ctk.CTkLabel(balance_trend_frame, text="No balance trend data available.",
                                             font=("Arial", 12), text_color="white")
                 no_data_label2.pack()
         except Exception as e:
@@ -1090,6 +1091,7 @@ def first_page():
 if __name__ == "__main__":
     try:
         first_page()
+        app.protocol("WM_DELETE_WINDOW", app.quit)  # Graceful exit
         app.mainloop()
     except (KeyboardInterrupt, tk.TclError):
         pass
