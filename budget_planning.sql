@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 05, 2025 at 06:32 AM
+-- Generation Time: Oct 23, 2025 at 01:50 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -31,11 +31,13 @@ CREATE TABLE `expense` (
   `id` int(11) NOT NULL,
   `title` varchar(255) DEFAULT NULL,
   `userid` varchar(50) DEFAULT NULL,
-  `date` date DEFAULT NULL,
+  `date` datetime DEFAULT NULL,
   `expense_type` varchar(50) DEFAULT NULL,
   `amount` decimal(10,2) DEFAULT NULL,
   `comment` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
 
 --
 -- Table structure for table `userinfo`
@@ -46,10 +48,6 @@ CREATE TABLE `userinfo` (
   `password` varchar(100) DEFAULT NULL,
   `user_name` varchar(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Indexes for dumped tables
---
 
 --
 -- Indexes for table `expense`
@@ -72,7 +70,7 @@ ALTER TABLE `userinfo`
 -- AUTO_INCREMENT for table `expense`
 --
 ALTER TABLE `expense`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
+  MODIFY `id` int(1) NOT NULL AUTO_INCREMENT;
 
 --
 -- Constraints for dumped tables
