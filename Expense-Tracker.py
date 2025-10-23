@@ -353,15 +353,13 @@ def second_page(userid):
                                     font=("Arial", 14, "bold"), text_color="white")
         balance_label.pack(pady=(0, 8))
         
-        # Chart section
-        chart_container = ctk.CTkFrame(main_container, fg_color=DARK_COLOR)
+        # Chart section (replace CTkFrame with CTkScrollableFrame)
+        chart_container = ctk.CTkScrollableFrame(main_container, fg_color=DARK_COLOR)
         chart_container.pack(fill="both", expand=True)
-        
         # Chart title
         title_label = ctk.CTkLabel(chart_container, text="📊 Expense Distribution", 
-                                  font=("Arial", 16, "bold"), text_color="white")
+                                font=("Arial", 16, "bold"), text_color="white")
         title_label.pack(pady=(20, 10))
-        
         return chart_container, summary_frame
     
     def calculate_balance():
@@ -674,9 +672,9 @@ def second_page(userid):
                 tk.messagebox.showerror("Error", f"Database error: {str(e)}")
     
     def update_chart():
-        """Update the pie chart and line graph for expense distribution and balance trend."""
-        # Clear existing chart
-        for widget in chart_frame.winfo_children()[1:]:  # Keep title
+        """Update the pie chart and line graph for expense distribution and balance trend, with sorting controls."""
+        # Clear existing chart except the title
+        for widget in chart_frame.winfo_children()[1:]:
             widget.destroy()
 
         cur = conn.cursor()
@@ -777,99 +775,152 @@ def second_page(userid):
                                             font=("Arial", 16), text_color="white")
                 no_data_label.pack(expand=True)
 
-            # --- LINE GRAPH: Balance Trend ---
-            # Create a dedicated frame for the line chart
-            balance_trend_frame = ctk.CTkFrame(chart_frame, fg_color=DARK_COLOR)
-            balance_trend_frame.pack(fill="x", padx=20, pady=(0, 10))
+            # --- BALANCE TREND SORT CONTROLS ---
+            sort_frame = ctk.CTkFrame(chart_frame, fg_color="transparent")
+            sort_frame.pack(fill="x", padx=20, pady=(0, 0))
 
-            # Centered header
-            balance_header = ctk.CTkLabel(balance_trend_frame, text="📈 Balance Trend", font=("Arial", 18, "bold"), text_color="white")
-            balance_header.pack(pady=(10, 0), fill="x")
+            ctk.CTkLabel(sort_frame, text="Sort Balance Trend by:", font=("Arial", 12, "bold"), text_color="white").pack(side="left", padx=(0,10))
 
-            # Fetch daily net changes
+            trend_periods = ["Day", "Week", "Month", "Year"]
+            trend_dropdown = ctk.CTkComboBox(sort_frame, values=trend_periods, width=120)
+            trend_dropdown.set("Month")
+            trend_dropdown.pack(side="left", padx=2)
+
+            # --- Dedicated container for balance trend chart ---
+            balance_trend_container = ctk.CTkFrame(chart_frame, fg_color="transparent")
+            balance_trend_container.pack(fill="x", padx=0, pady=(0, 0))
+
+            def filter_balance_trend(records, period):
+                df = pd.DataFrame(records, columns=["date", "amount", "expense_type"])
+                df["date"] = pd.to_datetime(df["date"])
+                now = pd.Timestamp.now()
+                if period == "Day":
+                    df = df[df["date"].dt.date == now.date()]
+                elif period == "Week":
+                    df = df[df["date"] >= now - pd.Timedelta(days=7)]
+                elif period == "Month":
+                    df = df[df["date"].dt.month == now.month]
+                elif period == "Year":
+                    df = df[df["date"].dt.year == now.year]
+                return df.values.tolist()
+
+            def draw_balance_trend(records):
+                # Clear previous chart in container
+                for widget in balance_trend_container.winfo_children():
+                    widget.destroy()
+
+                # Create a dedicated frame for the line chart (always)
+                balance_trend_frame = ctk.CTkFrame(balance_trend_container, fg_color=DARK_COLOR)
+                balance_trend_frame.pack(fill="x", padx=20, pady=(0, 10))
+
+                # Centered header (always)
+                balance_header = ctk.CTkLabel(balance_trend_frame, text="📈 Balance Trend", font=("Arial", 18, "bold"), text_color="white")
+                balance_header.pack(pady=(10, 0), fill="x")
+
+                if records:
+                    dates = []
+                    balances = []
+                    total = 0.0
+                    for row in records:
+                        dt = pd.to_datetime(row[0])
+                        amount = float(row[1])
+                        if row[2] in ('Income', 'Allowance'):
+                            total += amount
+                        else:
+                            total -= amount
+                        dates.append(dt)
+                        balances.append(total)
+
+                    fig2, ax2 = plt.subplots(figsize=(7, 3), facecolor=DARK_COLOR)
+                    ax2.set_facecolor(DARK_COLOR)
+                    ax2.plot(
+                        dates,
+                        balances,
+                        marker='o',
+                        markersize=8,
+                        markerfacecolor='#39ace7',
+                        markeredgecolor='white',
+                        color='#39ace7',
+                        linewidth=2,
+                        label='Balance'
+                    )
+                    ax2.axhline(0, color='#E74C3C', linestyle='--', linewidth=2, label='Limit (₱0)')
+                    ax2.set_title("", pad=0)
+                    ax2.set_ylabel("Balance (₱)", color='white')
+                    ax2.set_xlabel("Date", color='white')
+                    ax2.tick_params(axis='x', labelrotation=45, colors='white')
+                    ax2.tick_params(axis='y', colors='white')
+                    ax2.legend(facecolor=DARK_COLOR, edgecolor='white', fontsize=10)
+                    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+                    ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+                    fig2.autofmt_xdate()
+                    fig2.tight_layout()
+
+                    canvas2 = FigureCanvasTkAgg(fig2, master=balance_trend_frame)
+                    canvas2.draw()
+                    canvas2.get_tk_widget().pack(expand=True, fill="both", padx=10, pady=10)
+
+                    # Add interactive toolbar below the line graph
+                    toolbar = NavigationToolbar2Tk(canvas2, balance_trend_frame)
+                    toolbar.update()
+                    toolbar.pack(fill="x", padx=10, pady=(0, 10))
+
+                    # --- Tooltip for Line Graph ---
+                    tooltip_line = tk.Label(balance_trend_frame, bg="#222", fg="white", font=("Arial", 11), bd=1, relief="solid")
+                    tooltip_line.place_forget()
+
+                    def on_line_motion(event):
+                        found = False
+                        if event.inaxes == ax2:
+                            mouse_x, mouse_y = event.xdata, event.ydata
+                            if mouse_x is not None and mouse_y is not None:
+                                for i, (x, y) in enumerate(zip(dates, balances)):
+                                    x_val = ax2.transData.transform((mdates.date2num(x), float(y)))
+                                    mouse_val = (event.x, event.y)
+                                    dist = ((x_val[0] - mouse_val[0]) ** 2 + (x_val[1] - mouse_val[1]) ** 2) ** 0.5
+                                    if dist < 20:
+                                        tooltip_line.config(text=f"{x.strftime('%Y-%m-%d')}: ₱{y:,.2f}")
+                                        tooltip_line.place(x=event.x + 10, y=event.y + 10)
+                                        found = True
+                                        break
+                        if not found:
+                            tooltip_line.place_forget()
+
+                    canvas2.mpl_connect("motion_notify_event", on_line_motion)
+
+                else:
+                    # Show "No data" message but keep header and controls
+                    no_data_label2 = ctk.CTkLabel(balance_trend_frame, text="No balance trend data available.",
+                                                font=("Arial", 12), text_color="white")
+                    no_data_label2.pack(pady=30)
+
+            def refresh_balance_trend():
+                selected_period = trend_dropdown.get()
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT date, amount, expense_type
+                    FROM expense
+                    WHERE userid = %s
+                    ORDER BY date ASC, id ASC
+                """, (userid,))
+                all_records = cur.fetchall()
+                filtered_records = filter_balance_trend(all_records, selected_period)
+                draw_balance_trend(filtered_records)
+
+            sort_btn = ctk.CTkButton(sort_frame, text="Sort", command=refresh_balance_trend, width=80, fg_color=PRIMARY_COLOR, hover_color=SECONDARY_COLOR)
+            sort_btn.pack(side="left", padx=10)
+
+            # Initial draw with all records (default period)
             cur.execute("""
                 SELECT date, amount, expense_type
                 FROM expense
                 WHERE userid = %s
                 ORDER BY date ASC, id ASC
             """, (userid,))
-            records = cur.fetchall()
+            all_records = cur.fetchall()
+            filtered_records = filter_balance_trend(all_records, trend_dropdown.get())
+            draw_balance_trend(filtered_records)
 
-            if records:
-                dates = []
-                balances = []
-                total = 0.0
-                for row in records:
-                    dt = datetime.strptime(str(row[0]), "%Y-%m-%d %H:%M:%S")
-                    amount = float(row[1])
-                    if row[2] in ('Income', 'Allowance'):
-                        total += amount
-                    else:
-                        total -= amount
-                    dates.append(dt)
-                    balances.append(total)
-
-                fig2, ax2 = plt.subplots(figsize=(7, 3), facecolor=DARK_COLOR)
-                ax2.set_facecolor(DARK_COLOR)
-                ax2.plot(
-                    dates,
-                    balances,
-                    marker='o',
-                    markersize=8,
-                    markerfacecolor='#39ace7',
-                    markeredgecolor='white',
-                    color='#39ace7',
-                    linewidth=2,
-                    label='Balance'
-                )
-                ax2.axhline(0, color='#E74C3C', linestyle='--', linewidth=2, label='Limit (₱0)')
-                ax2.set_title("", pad=0)  # Remove matplotlib title, use CTk header
-                ax2.set_ylabel("Balance (₱)", color='white')
-                ax2.set_xlabel("Date", color='white')
-                ax2.tick_params(axis='x', labelrotation=45, colors='white')
-                ax2.tick_params(axis='y', colors='white')
-                ax2.legend(facecolor=DARK_COLOR, edgecolor='white', fontsize=10)
-                ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-                ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
-                fig2.autofmt_xdate()
-                fig2.tight_layout()
-
-                canvas2 = FigureCanvasTkAgg(fig2, master=balance_trend_frame)
-                canvas2.draw()
-                canvas2.get_tk_widget().pack(expand=True, fill="both", padx=10, pady=10)
-
-                # Add interactive toolbar below the line graph
-                toolbar = NavigationToolbar2Tk(canvas2, balance_trend_frame)
-                toolbar.update()
-                toolbar.pack(fill="x", padx=10, pady=(0, 10))
-
-                # --- Tooltip for Line Graph ---
-                tooltip_line = tk.Label(balance_trend_frame, bg="#222", fg="white", font=("Arial", 11), bd=1, relief="solid")
-                tooltip_line.place_forget()
-
-                def on_line_motion(event):
-                    found = False
-                    if event.inaxes == ax2:
-                        mouse_x, mouse_y = event.xdata, event.ydata
-                        if mouse_x is not None and mouse_y is not None:
-                            for i, (x, y) in enumerate(zip(dates, balances)):
-                                x_val = ax2.transData.transform((mdates.date2num(x), float(y)))
-                                mouse_val = (event.x, event.y)
-                                dist = ((x_val[0] - mouse_val[0]) ** 2 + (x_val[1] - mouse_val[1]) ** 2) ** 0.5
-                                if dist < 20:
-                                    tooltip_line.config(text=f"{x.strftime('%Y-%m-%d')}: ₱{y:,.2f}")
-                                    tooltip_line.place(x=event.x + 10, y=event.y + 10)
-                                    found = True
-                                    break
-                    if not found:
-                        tooltip_line.place_forget()
-
-                canvas2.mpl_connect("motion_notify_event", on_line_motion)
-
-            else:
-                no_data_label2 = ctk.CTkLabel(balance_trend_frame, text="No balance trend data available.",
-                                            font=("Arial", 12), text_color="white")
-                no_data_label2.pack()
         except Exception as e:
             error_label = ctk.CTkLabel(chart_frame, text=f"Error loading chart: {str(e)}",
                                     font=("Arial", 16), text_color="#E74C3C")
