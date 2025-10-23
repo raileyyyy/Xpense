@@ -17,7 +17,6 @@ conn = mysql.connector.connect(
     port=3307,
 )
 
-# --- Add the function here ---
 def fetch_expense_data(userid):
     cur = conn.cursor()
     cur.execute("""
