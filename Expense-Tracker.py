@@ -14,7 +14,7 @@ conn = mysql.connector.connect(
     user="root",
     host="localhost",
     password="",
-    port=3306,
+    port=3307,
 )
 
 def fetch_expense_data(userid):
@@ -35,8 +35,9 @@ def fetch_expense_data(userid):
 app = ctk.CTk()
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
-app.geometry("1440x820")
+# app.geometry("1440x820")
 app.title("Xpense")
+app.after(100, lambda: app.wm_state('zoomed')) # For immediate fullscreen when running the application
 
 # Custom color palette
 PRIMARY_COLOR = "#39ace7"
@@ -733,7 +734,7 @@ def second_page(userid):
     def update_chart():
         """Update the pie chart and line graph for expense distribution and balance trend, with sorting controls."""
         # Clear existing chart except the title
-        for widget in chart_frame.winfo_children()[1:]:
+        for widget in chart_frame.winfo_children():
             widget.destroy()
 
         cur = conn.cursor()
@@ -943,7 +944,7 @@ def second_page(userid):
                                     mouse_val = (event.x, event.y)
                                     dist = ((x_val[0] - mouse_val[0]) ** 2 + (x_val[1] - mouse_val[1]) ** 2) ** 0.5
                                     if dist < 20:
-                                        tooltip_line.config(text=f"{x.strftime('%Y-%m-%d')}: ₱{y:,.2f}")
+                                        tooltip_line.config(text=f"{x.strftime('%Y-%m-%d %H:%M:%S')}: ₱{y:,.2f}")
                                         tooltip_line.place(x=event.x + 10, y=event.y + 10)
                                         found = True
                                         break
